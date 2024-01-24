@@ -1,28 +1,62 @@
 import React, { useEffect } from 'react'
 import { useState } from 'react';
 import Task from './task';
+import axios from 'axios';
+import toast, { Toaster } from 'react-hot-toast';
+import { Context, server } from '..';
+import { useContext } from 'react';
+import { Navigate } from 'react-router-dom';
 
 
 const Home = () => {
-    const [tasks,settask]=useState(localStorage.getItem("tasks")?JSON.parse(localStorage.getItem("tasks")):[]);
+    const [tasks,settask]=useState([]);
     const [title,settitle]=useState("");
     const [description,setdescription]=useState("");
-    const submithandler=(e)=>{
+    const [loading,setloading]=useState(false);
+    const {user}=useContext(Context);
+    const {isauthenticated}=useContext(Context);
+    const submithandler=async(e)=>{
+      setloading(true);
       e.preventDefault();
       settask([...tasks,{title,description}]);
       settitle("");
       setdescription("");
+      try {
+        
+        const {data}=await axios.post(`${server}/task/newtask`,{
+          title,description
+        },{headers:{Authorization:localStorage.getItem("token")}})
+        toast.success("task created");
+      
+        setloading(false);
+      } catch (error) {
+        toast.error(error.response.data.message);
+        
+        setloading(false);
+      }
     }
-    const deltask=(index)=>{
-    const filteredarr=tasks.filter((val,i)=>{
-     return i!==index;
-    })
-    settask(filteredarr);
+    const updatehandler=async(id)=>{
+      try {
+        const {data}=await axios.put(`${server}/task/${id}`,{},{headers:{Authorization:localStorage.getItem("token")}})
+      toast.success(data.message);
+      } catch (error) {
+        toast.error(error.response.data.message);
+      }
+    }
+    const deletehandler=async(id)=>{
+      try {
+        const {data}=await axios.delete(`${server}/task/${id}`,{headers:{Authorization:localStorage.getItem("token")}})
+      toast.success(data.message);
+      } catch (error) {
+        toast.error(error.response.data.message);
+      }
     }
     useEffect(()=>{
-      localStorage.setItem("tasks",JSON.stringify(tasks));
+      axios.get(`${server}/task/mytask`,{headers:{Authorization:localStorage.getItem("token")}}).then((res)=>settask(res.data.tasks)).catch((error)=>{
+        toast.error(error.response.data.message);
+      })
     },[tasks]);
-    
+    if(!isauthenticated) return <Navigate to={"/login"}/>
     return(
   <div className='container'>
     <form onSubmit={submithandler}>
@@ -33,10 +67,13 @@ const Home = () => {
        value={description} onChange={(e)=>{
         setdescription(e.target.value);
       }}></textarea>
-      <button>Submit</button>
+      <button disabled={loading}>Submit</button><Toaster
+      position="top-center"
+      reverseOrder={true}
+  />
     </form>
   {tasks.map((item,index)=>(
-    <Task key={index} title={item.title} description={item.description} deltask={deltask} index={index}/>
+    <Task key={index} title={item.title} description={item.description} iscompleted={item.iscompleted} updatehandler={updatehandler} deletehandler={deletehandler} id={item._id} index={index}/>
   ))}
   </div>)
 }
